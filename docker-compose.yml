@@ -1,0 +1,46 @@
+services:
+  origin:
+    build: .
+    image: layer-fanout-drill:latest
+    command:
+      - uvicorn
+      - app.origin_app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    environment:
+      DRILL_LAYER_BYTES: "8388608"
+      DRILL_ORIGIN_CHUNK_BYTES: "65536"
+    expose:
+      - "8001"
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  gateway:
+    build: .
+    image: layer-fanout-drill:latest
+    command:
+      - uvicorn
+      - app.gateway_app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment:
+      DRILL_ORIGIN_BASE: "http://origin:8001"
+      DRILL_LAYER_BYTES: "8388608"
+    ports:
+      - "8000:8000"
+    depends_on:
+      origin:
+        condition: service_healthy

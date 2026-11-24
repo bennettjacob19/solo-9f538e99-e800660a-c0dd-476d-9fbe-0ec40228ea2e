@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>跨机房镜像层分发演练</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header>
+  <h1>跨机房镜像层分发演练</h1>
+  <p class="sub">一个 HTTP 主下载 · 快慢两路 · 慢端 3/4 暂停 · 网关留存 / 条件补段 · 原版 SHA-256 校验</p>
+</header>
+
+<main>
+  <section class="card controls">
+    <h2>演练参数</h2>
+    <form id="drill-form">
+      <label>层大小 (字节)<input name="size_bytes" type="number" value="8388608" min="1024" step="1024"></label>
+      <label>主下载分块 (字节)<input name="chunk_size" type="number" value="65536" min="1024" step="1024"></label>
+      <label>每块延迟 (ms)<input name="chunk_delay_ms" type="number" value="15" min="0" max="2000"></label>
+      <label>网关留存正文额度（内存+磁盘）<input name="retention_bytes" type="number" value="1048576" min="0" step="1024"></label>
+      <label>其中内存部分 (字节)<input name="retention_memory_bytes" type="number" value="524288" min="0" step="1024"></label>
+      <label>额外回源正文额度 (字节)<input name="backfill_bytes" type="number" value="2097152" min="0" step="1024"></label>
+      <label>慢端暂停点（占总量比例）<input name="pause_fraction" type="number" value="0.75" min="0.05" max="0.95" step="0.05"></label>
+      <label class="check"><input name="auto_switch_on_pause" type="checkbox"> 慢端暂停时自动把源站换成等长新版</label>
+      <div class="actions">
+        <button id="start-btn" type="submit">开始演练</button>
+        <button id="switch-btn" type="button" class="secondary">立即换版（v1↔v2）</button>
+        <button id="reset-btn" type="button" class="ghost">重置</button>
+      </div>
+    </form>
+    <div id="notice" class="notice" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>总体状态</h2>
+    <div class="status-grid">
+      <div><span class="k">阶段</span><span id="phase" class="v">idle</span></div>
+      <div><span class="k">结果</span><span id="outcome" class="v">pending</span></div>
+      <div><span class="k">层大小</span><span id="total-bytes" class="v">-</span></div>
+      <div><span class="k">主下载强 ETag</span><span id="main-etag" class="v mono">-</span></div>
+      <div><span class="k">原版 SHA-256</span><span id="expected-sha" class="v mono">-</span></div>
+      <div><span class="k">耗时</span><span id="elapsed" class="v">-</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>两路实收与校验</h2>
+    <table class="routes">
+      <thead>
+        <tr><th>路线</th><th>实收字节</th><th>进度</th><th>SHA-256 校验</th><th>缺段</th></tr>
+      </thead>
+      <tbody>
+        <tr id="row-fast">
+          <td>快端</td>
+          <td id="fast-bytes" class="mono">0</td>
+          <td><div class="bar"><div id="fast-bar" class="fill fast"></div></div></td>
+          <td id="fast-verify" class="pending">待运行</td>
+          <td>-</td>
+        </tr>
+        <tr id="row-slow">
+          <td>慢端</td>
+          <td id="slow-bytes" class="mono">0</td>
+          <td><div class="bar"><div id="slow-bar" class="fill slow"></div></div></td>
+          <td id="slow-verify" class="pending">待运行</td>
+          <td id="slow-missing" class="mono">-</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="route-detail">
+      <div><span class="k">慢端暂停点</span><span id="slow-pause" class="v">-</span></div>
+      <div><span class="k">慢端已续传</span><span id="slow-resumed" class="v">-</span></div>
+      <div><span class="k">补段校验（ETag/区间）</span><span id="backfill-verify" class="v">-</span></div>
+      <div><span class="k">补段状态</span><span id="backfill-status" class="v">-</span></div>
+      <div><span class="k">补段额度余量</span><span id="backfill-quota" class="v">-</span></div>
+      <div><span class="k">额度覆盖尾部</span><span id="quota-cover" class="v">-</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>源站实发与网关暂存</h2>
+    <div class="status-grid">
+      <div><span class="k">源站累计实发</span><span id="origin-sent" class="v mono">0</span></div>
+      <div><span class="k">主下载 / 补段请求数</span><span id="origin-reqs" class="v">0 / 0</span></div>
+      <div><span class="k">源站当前版本</span><span id="origin-version" class="v">v1</span></div>
+      <div><span class="k">网关暂存峰值</span><span id="retention-peak" class="v mono">0</span></div>
+      <div><span class="k">其中内存 / 磁盘峰值</span><span id="retention-split" class="v mono">0 / 0</span></div>
+      <div><span class="k">暂存额度 / 已用</span><span id="retention-used" class="v mono">0 / 0</span></div>
+    </div>
+    <div id="origin-switch" class="notice info" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>事件</h2>
+    <ol id="events" class="events"></ol>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
