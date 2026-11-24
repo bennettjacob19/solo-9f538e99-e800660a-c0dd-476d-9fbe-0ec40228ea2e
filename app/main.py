@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -148,9 +149,11 @@ def create_app(
 
     async def reset_origin(size_bytes: Optional[int]) -> None:
         if origin_store is not None:
-            origin_store.reset(size_bytes)
+            # File generation for up to 128 MiB is blocking; keep it off the
+            # event loop so downloads keep streaming through a resize.
+            await asyncio.to_thread(origin_store.reset, size_bytes)
             return
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
             params = {"size_bytes": size_bytes} if size_bytes else None
             resp = await client.post(
                 app.state.origin_base + "/origin/reset", params=params

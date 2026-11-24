@@ -16,7 +16,7 @@
   <section class="card controls">
     <h2>演练参数</h2>
     <form id="drill-form">
-      <label>层大小 (字节)<input name="size_bytes" type="number" value="8388608" min="1024" step="1024"></label>
+      <label>层大小 (字节，上限 134217728 = 128 MiB)<input name="size_bytes" type="number" value="8388608" min="1024" max="134217728" step="1024"></label>
       <label>主下载分块 (字节)<input name="chunk_size" type="number" value="65536" min="1024" step="1024"></label>
       <label>每块延迟 (ms)<input name="chunk_delay_ms" type="number" value="15" min="0" max="2000"></label>
       <label>网关留存正文额度（内存+磁盘）<input name="retention_bytes" type="number" value="1048576" min="0" step="1024"></label>
@@ -26,6 +26,7 @@
       <label class="check"><input name="auto_switch_on_pause" type="checkbox"> 慢端暂停时自动把源站换成等长新版</label>
       <div class="actions">
         <button id="start-btn" type="submit">开始演练</button>
+        <button id="preset-128-btn" type="button" class="secondary">填入 128 MiB 大层预设</button>
         <button id="switch-btn" type="button" class="secondary">立即换版（v1↔v2）</button>
         <button id="reset-btn" type="button" class="ghost">重置</button>
       </div>
@@ -84,6 +85,7 @@
       <div><span class="k">源站累计实发</span><span id="origin-sent" class="v mono">0</span></div>
       <div><span class="k">主下载 / 补段请求数</span><span id="origin-reqs" class="v">0 / 0</span></div>
       <div><span class="k">源站当前版本</span><span id="origin-version" class="v">v1</span></div>
+      <div><span class="k">最近 206 定位+发送用量</span><span id="origin-range-work" class="v mono">-</span></div>
       <div><span class="k">网关暂存峰值</span><span id="retention-peak" class="v mono">0</span></div>
       <div><span class="k">其中内存 / 磁盘峰值</span><span id="retention-split" class="v mono">0 / 0</span></div>
       <div><span class="k">暂存额度 / 已用</span><span id="retention-used" class="v mono">0 / 0</span></div>

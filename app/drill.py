@@ -215,7 +215,9 @@ class DrillRun:
         self.retention.close()
 
     async def _origin_post(self, path: str, params: dict[str, Any] | None = None) -> dict:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+        # Generating/resetting a 128 MiB layer can take seconds on a slow disk;
+        # keep this generous so the drill does not fail on a cold origin.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             resp = await client.post(self.origin_base + path, params=params)
             resp.raise_for_status()
             return resp.json()

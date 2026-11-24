@@ -2,6 +2,18 @@ services:
   origin:
     build: .
     image: layer-fanout-drill:latest
+    # Hard 96 MiB memory ceiling for the origin service. 128 MiB layers are
+    # generated/hashed in 64 KiB blocks and streamed to anonymous layer files
+    # (DRILL_ORIGIN_DATA_DIR), never held whole in RAM, so drills up to
+    # 128 MiB still fit. Both the classic key and the deploy limit are set to
+    # the exact same 96 MiB value for Compose v1/v2 compatibility.
+    mem_limit: 96m
+    deploy:
+      resources:
+        limits:
+          # "96M" is binary MiB here; `docker compose config` resolves it to
+          # 100663296 bytes, identical to mem_limit: 96m.
+          memory: 96M
     command:
       - uvicorn
       - app.origin_app:app
@@ -12,6 +24,9 @@ services:
     environment:
       DRILL_LAYER_BYTES: "8388608"
       DRILL_ORIGIN_CHUNK_BYTES: "65536"
+      DRILL_ORIGIN_DATA_DIR: "/tmp/origin-layers"
+      # Tame glibc arena growth in the memory-constrained origin container.
+      MALLOC_ARENA_MAX: "2"
     expose:
       - "8001"
     ports:
@@ -21,10 +36,13 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=2)"
+        # Socket-only probe avoids importing urllib/ssl (~20 MiB RSS), keeping
+        # the transient healthcheck process small under the 96 MiB cap.
+        - "import socket; s=socket.create_connection(('127.0.0.1', 8001), timeout=2); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); assert b' 200 ' in s.recv(128)"
       interval: 3s
       timeout: 3s
       retries: 20
+      start_period: 10s
 
   gateway:
     build: .

@@ -127,6 +127,31 @@
     $("origin-version").textContent = origin.current_version || "-";
     if (origin.current_version) currentOriginVersion = origin.current_version;
 
+    const workEl = $("origin-range-work");
+    const reqs = Array.isArray(origin.requests) ? origin.requests : [];
+    const ranged = reqs.find((r) => r.status === 206 && r.body_bytes_used !== undefined);
+    if (ranged) {
+      const used = fmt(ranged.body_bytes_used || 0);
+      if (ranged.work_within_limit === true) {
+        workEl.textContent = `${used} B · ≤1 MiB 预算 ✓`;
+        workEl.className = "v mono match";
+      } else if (ranged.work_within_limit === false) {
+        workEl.textContent = `${used} B · 超出 1 MiB 预算 ✗`;
+        workEl.className = "v mono mismatch";
+      } else {
+        workEl.textContent = `${used} B（区间 > 64 KiB，预算规则不适用）`;
+        workEl.className = "v mono";
+      }
+      workEl.title =
+        `range=${ranged.range || "-"} range_length=${ranged.range_length}\n` +
+        `positioning=${ranged.positioning_bytes} read=${ranged.storage_read_bytes} ` +
+        `generated=${ranged.generated_bytes}\nbody_bytes_used=${ranged.body_bytes_used}`;
+    } else {
+      workEl.textContent = "-";
+      workEl.className = "v mono";
+      workEl.title = "";
+    }
+
     const ret = state.retention || {};
     $("retention-peak").textContent = fmt(ret.peak_bytes || 0);
     $("retention-split").textContent = `${fmt(ret.peak_memory_bytes || 0)} / ${fmt(ret.peak_disk_bytes || 0)}`;
@@ -207,6 +232,25 @@
     } catch (err) {
       showNotice(`换版失败：${err.message || err}`);
     }
+  });
+
+  $("preset-128-btn").addEventListener("click", () => {
+    // A one-click 128 MiB drill that is expected to finish both routes:
+    // retain the whole 32 MiB tail (mostly spilled to disk) and run flat out.
+    const set = (name, value) => {
+      const input = form.querySelector(`[name="${name}"]`);
+      if (input) input.value = String(value);
+    };
+    set("size_bytes", 128 * 1024 * 1024);
+    set("chunk_size", 1024 * 1024);
+    set("chunk_delay_ms", 0);
+    set("retention_bytes", 33 * 1024 * 1024);
+    set("retention_memory_bytes", 4 * 1024 * 1024);
+    set("backfill_bytes", 0);
+    set("pause_fraction", 0.75);
+    const auto = form.querySelector('[name="auto_switch_on_pause"]');
+    if (auto) auto.checked = false;
+    clearNotice();
   });
 
   $("reset-btn").addEventListener("click", async () => {
